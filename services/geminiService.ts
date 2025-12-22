@@ -36,7 +36,7 @@ export async function transcribeWithGemini(apiKey: string, audioBlob: Blob, prev
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Audio-native, low latency model
+            model: 'gemini-3-pro-preview', // Unified model for all Gemini calls
             contents: {
                 parts: [
                     { inlineData: { mimeType: audioBlob.type, data: base64Data } },
