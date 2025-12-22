@@ -1,18 +1,22 @@
 
 import { GoogleGenAI } from '@google/genai';
 
+// Model configuration
+const PRIMARY_MODEL = 'gemini-3-pro-preview';
+const FALLBACK_MODEL = 'gemini-2.5-flash';
+
 // Helper to convert Blob to Base64
 function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 }
 
 const TRANSCRIPTION_SYSTEM_INSTRUCTION = `당신은 전문 의료 녹취사입니다. 당신의 임무는 제공된 오디오 파일에서 들리는 말소리를 정확하게 텍스트로 옮기는 것입니다.
@@ -29,27 +33,35 @@ export async function transcribeWithGemini(apiKey: string, audioBlob: Blob, prev
     const base64Data = await blobToBase64(audioBlob);
 
     let promptText = "진료 녹음 파일을 전사해 주세요.";
-    
+
     if (previousContext) {
         promptText += `\n\n[이전 대화 문맥]\n${previousContext}\n\n위의 이전 문맥을 참고하여 대화가 자연스럽게 이어지도록 전사하세요.`;
     }
 
+    const generateRequest = (model: string) => ({
+        model,
+        contents: {
+            parts: [
+                { inlineData: { mimeType: audioBlob.type, data: base64Data } },
+                { text: promptText }
+            ]
+        },
+        config: {
+            systemInstruction: TRANSCRIPTION_SYSTEM_INSTRUCTION,
+        }
+    });
+
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview', // Unified model for all Gemini calls
-            contents: {
-                parts: [
-                    { inlineData: { mimeType: audioBlob.type, data: base64Data } },
-                    { text: promptText }
-                ]
-            },
-            config: {
-                systemInstruction: TRANSCRIPTION_SYSTEM_INSTRUCTION,
-            }
-        });
+        const response = await ai.models.generateContent(generateRequest(PRIMARY_MODEL));
         return response.text?.trim() || "";
-    } catch (e) {
-        throw new Error(`Gemini 음성 전사 실패: ${(e as Error).message}`);
+    } catch (primaryError) {
+        console.warn(`PRIMARY_MODEL 실패, FALLBACK_MODEL로 재시도: ${(primaryError as Error).message}`);
+        try {
+            const fallbackResponse = await ai.models.generateContent(generateRequest(FALLBACK_MODEL));
+            return fallbackResponse.text?.trim() || "";
+        } catch (fallbackError) {
+            throw new Error(`Gemini 음성 전사 실패 (PRIMARY & FALLBACK): ${(fallbackError as Error).message}`);
+        }
     }
 }
 
@@ -80,19 +92,27 @@ export async function verifyAndCorrectTranscript(geminiApiKey: string | undefine
     if (!transcript.trim()) {
         return transcript;
     }
-    
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const generateRequest = (model: string) => ({
+        model,
+        contents: getVerificationPrompt(transcript),
+        config: {
+            systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
+        },
+    });
+
     try {
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: getVerificationPrompt(transcript),
-            config: {
-                systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
-            },
-        });
+        const response = await ai.models.generateContent(generateRequest(PRIMARY_MODEL));
         return response.text?.trim() || transcript;
-    } catch (e) {
-        throw new Error(`Gemini 전사 내용 검수 실패: ${(e as Error).message}`);
+    } catch (primaryError) {
+        console.warn(`PRIMARY_MODEL 실패, FALLBACK_MODEL로 재시도: ${(primaryError as Error).message}`);
+        try {
+            const fallbackResponse = await ai.models.generateContent(generateRequest(FALLBACK_MODEL));
+            return fallbackResponse.text?.trim() || transcript;
+        } catch (fallbackError) {
+            throw new Error(`Gemini 전사 내용 검수 실패 (PRIMARY & FALLBACK): ${(fallbackError as Error).message}`);
+        }
     }
 }
 
@@ -119,15 +139,15 @@ const SYSTEM_INSTRUCTION = `당신은 한의원 진료를 돕는 AI 어시스턴
 `;
 
 const formatKST = (d: Date) =>
-  new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-  }).format(d);
+    new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+    }).format(d);
 
 
 const getUserPrompt = (transcript: string, additionalNotes: string, consultationDate: Date): string => {
@@ -209,18 +229,26 @@ export async function generateSoapChart(geminiApiKey: string | undefined, transc
     if (!geminiApiKey) {
         throw new Error('Gemini API 키가 없습니다.');
     }
-    
+
     try {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+        const generateRequest = (model: string) => ({
+            model,
             contents: getUserPrompt(transcript, additionalNotes, consultationDate),
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
             },
         });
-        return response.text ?? '';
+
+        try {
+            const response = await ai.models.generateContent(generateRequest(PRIMARY_MODEL));
+            return response.text ?? '';
+        } catch (primaryError) {
+            console.warn(`PRIMARY_MODEL 실패, FALLBACK_MODEL로 재시도: ${(primaryError as Error).message}`);
+            const fallbackResponse = await ai.models.generateContent(generateRequest(FALLBACK_MODEL));
+            return fallbackResponse.text ?? '';
+        }
     } catch (e) {
-        throw new Error(`Gemini 생성 실패: ${(e as Error).message}`);
+        throw new Error(`Gemini 생성 실패 (PRIMARY & FALLBACK): ${(e as Error).message}`);
     }
 }
