@@ -21,7 +21,8 @@ import {
     NotionIcon,
     RevisitIcon,
     GoogleSheetsIcon,
-    DoctalkIcon
+    DoctalkIcon,
+    RefreshIcon
 } from './components/icons.tsx';
 
 // TypeScript type definitions for Google API objects
@@ -1176,7 +1177,7 @@ const App: React.FC = () => {
                             <span>doctalk 예약</span>
                         </button>
                         <button
-                            onClick={() => window.open('https://www.notion.so/2b524d09893681e6b507ea7422cbe9ac?v=2b524d09893681ad9a41000cc76ed3f6', '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.open('https://www.notion.so/2c47db3c87d7812e996ee8549265544d?v=2c47db3c87d7800ea36f000c49b829fe', '_blank', 'noopener,noreferrer')}
                             className="flex items-center justify-center gap-x-1.5 bg-gray-700 text-gray-200 text-sm font-semibold py-1.5 px-2 rounded-md hover:bg-gray-600 transition-colors border border-gray-600 shadow-sm"
                             aria-label="Notion 위키 열기"
                             title="Notion 위키 열기"
@@ -1271,6 +1272,16 @@ const App: React.FC = () => {
                         >
                             {isSavingToDrive ? <Spinner className="w-8 h-8" /> : <SaveIcon className="w-8 h-8" />}
                             <span className="text-sm mt-1 font-semibold">{isSavingToDrive ? '저장 중...' : '저장'}</span>
+                        </button>
+                        <button
+                            onClick={() => window.location.reload()}
+                            disabled={isGenerating || isRecording}
+                            className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-colors duration-300 ease-in-out shadow-lg bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500 text-white"
+                            aria-label="새 입력"
+                            title="새 입력 (페이지 초기화)"
+                        >
+                            <RefreshIcon className="w-8 h-8" />
+                            <span className="text-sm mt-1 font-semibold">새 입력</span>
                         </button>
                     </div>
                     <p className="mt-4 text-gray-300 text-center h-5">{statusMessage || '진료 녹음을 시작하거나 텍스트를 입력하세요.'}</p>
