@@ -1276,7 +1276,7 @@ const App: React.FC = () => {
                         <button
                             onClick={() => window.location.reload()}
                             disabled={isGenerating || isRecording}
-                            className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-colors duration-300 ease-in-out shadow-lg bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500 text-white"
+                            className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-colors duration-300 ease-in-out shadow-lg bg-white hover:bg-gray-100 disabled:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500 text-gray-800"
                             aria-label="새 입력"
                             title="새 입력 (페이지 초기화)"
                         >
