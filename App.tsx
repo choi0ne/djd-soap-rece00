@@ -21,7 +21,8 @@ import {
     NotionIcon,
     RevisitIcon,
     GoogleSheetsIcon,
-    DoctalkIcon
+    DoctalkIcon,
+    RefreshIcon
 } from './components/icons.tsx';
 
 // TypeScript type definitions for Google API objects
@@ -565,6 +566,24 @@ const App: React.FC = () => {
             window.google.accounts.id.disableAutoSelect();
         }
     };
+
+    // 새 입력 - 상태 초기화 (로그인 유지, 페이지 새로고침 없음)
+    const handleReset = useCallback(() => {
+        setTranscript('');
+        setAdditionalNotes('');
+        setSoapChart('');
+        setSummary('');
+        setPatientName('');
+        setIsEditingPatientName(false);
+        setEditedPatientName('');
+        setError(null);
+        setIsEditing(false);
+        setIsEditingTranscript(false);
+        setStatusMessage('');
+        audioChunksRef.current = [];
+        completedAudioBlobsRef.current = [];
+        console.log('✅ 새 입력 - 상태 초기화 완료 (로그인 유지)');
+    }, []);
 
     // 토큰 자동 갱신 (만료 5분 전에 자동 갱신)
     useEffect(() => {
@@ -1271,6 +1290,16 @@ const App: React.FC = () => {
                         >
                             {isSavingToDrive ? <Spinner className="w-8 h-8" /> : <SaveIcon className="w-8 h-8" />}
                             <span className="text-sm mt-1 font-semibold">{isSavingToDrive ? '저장 중...' : '저장'}</span>
+                        </button>
+                        <button
+                            onClick={handleReset}
+                            disabled={isGenerating || isRecording}
+                            className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-colors duration-300 ease-in-out shadow-lg bg-white hover:bg-gray-100 disabled:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500 text-gray-800"
+                            aria-label="새 입력"
+                            title="새 입력 (상태 초기화)"
+                        >
+                            <RefreshIcon className="w-8 h-8" />
+                            <span className="text-sm mt-1 font-semibold">새 입력</span>
                         </button>
                     </div>
                     <p className="mt-4 text-gray-300 text-center h-5">{statusMessage || '진료 녹음을 시작하거나 텍스트를 입력하세요.'}</p>
