@@ -21,7 +21,7 @@ import {
 // 토큰 자동 갱신 주기 (5분)
 const TOKEN_CHECK_INTERVAL = 5 * 60 * 1000;
 
-export const useGoogleAuth = (googleClientId: string | null, googleApiKey: string | null) => {
+export const useGoogleAuth = (googleClientId: string | null, _googleApiKey: string | null) => {
     const [isSignedIn, setIsSignedIn] = useState<boolean>(false);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);

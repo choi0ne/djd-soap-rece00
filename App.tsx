@@ -142,7 +142,7 @@ const CalendarModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, on
     onClose: () => void;
     isSignedIn: boolean;
     isApiLoading: boolean;
-    apiError: string;
+    apiError: string | null;
     onAuthClick: () => void;
 }) => {
     const [events, setEvents] = useState<any[]>([]);
@@ -266,7 +266,7 @@ const TasksModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, onAut
     onClose: () => void;
     isSignedIn: boolean;
     isApiLoading: boolean;
-    apiError: string;
+    apiError: string | null;
     onAuthClick: () => void;
 }) => {
     const [tasks, setTasks] = useState<any[]>([]);
