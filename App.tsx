@@ -448,7 +448,97 @@ const App: React.FC = () => {
     const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
 
     // Google OAuth (PKCE)
-    const { isSignedIn: isGoogleSignedIn, signIn: handleGoogleAuthClick, signOut: handleGoogleSignOut, isLoading: isGoogleApiLoading, error: googleApiError } = useGoogleAuth(googleClientId, googleApiKey);
+    const { isSignedIn: isGoogleSignedIn, signIn: handleGoogleAuthClick, signOut: handleGoogleSignOut, isLoading: isGoogleApiLoading, error: googleApiError, getValidAccessToken } = useGoogleAuth(googleClientId, googleApiKey);
+
+    // GAPI Client Initialization State
+    const [isGapiLoaded, setIsGapiLoaded] = useState(false);
+
+    // Load GAPI script and initialize client
+    useEffect(() => {
+        // Check if script is already loaded
+        if (window.gapi) {
+            setIsGapiLoaded(true);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            console.log('[GAPI] Script loaded');
+            setIsGapiLoaded(true);
+        };
+        script.onerror = () => {
+            console.error('[GAPI] Failed to load script');
+        };
+        document.body.appendChild(script);
+
+        return () => {
+            // Cleanup is optional for scripts
+        };
+    }, []);
+
+    // Initialize GAPI client when script is loaded and API key is available
+    useEffect(() => {
+        if (!isGapiLoaded || !googleApiKey) return;
+
+        const initGapiClient = async () => {
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    window.gapi.load('client', { callback: resolve, onerror: reject });
+                });
+
+                await window.gapi.client.init({
+                    apiKey: googleApiKey,
+                    discoveryDocs: [
+                        'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
+                        'https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest',
+                        'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+                    ],
+                });
+
+                console.log('[GAPI] Client initialized');
+
+                // Sync token if already signed in
+                if (isGoogleSignedIn) {
+                    try {
+                        const token = await getValidAccessToken();
+                        window.gapi.client.setToken({ access_token: token });
+                        console.log('[GAPI] Token synced successfully');
+                    } catch (e) {
+                        console.warn('[GAPI] Could not sync token:', e);
+                    }
+                }
+            } catch (error) {
+                console.error('[GAPI] Client init failed:', error);
+            }
+        };
+
+        initGapiClient();
+    }, [isGapiLoaded, googleApiKey, isGoogleSignedIn, getValidAccessToken]);
+
+    // Sync PKCE token to GAPI when sign-in status changes
+    useEffect(() => {
+        if (!isGapiLoaded || !window.gapi?.client) return;
+
+        const syncToken = async () => {
+            if (isGoogleSignedIn) {
+                try {
+                    const token = await getValidAccessToken();
+                    window.gapi.client.setToken({ access_token: token });
+                    console.log('[GAPI] Token synced on sign-in');
+                } catch (e) {
+                    console.warn('[GAPI] Token sync failed:', e);
+                }
+            } else {
+                window.gapi.client.setToken(null);
+                console.log('[GAPI] Token cleared on sign-out');
+            }
+        };
+
+        syncToken();
+    }, [isGoogleSignedIn, isGapiLoaded, getValidAccessToken]);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
