@@ -1194,7 +1194,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex-1 flex justify-end">
                     <div className="flex flex-col space-y-2 items-end">
-                        {!isGoogleApiLoading && (
+                        {googleClientId && (
                             isGoogleSignedIn ? (
                                 <button
                                     onClick={handleGoogleSignOut}
