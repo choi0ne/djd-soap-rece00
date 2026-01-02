@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { transcribeWithGemini, generateSoapChart, verifyAndCorrectTranscript } from './services/geminiService.ts';
-import { useGoogleAuth } from './hooks/useGoogleAuth';
 import {
     MicrophoneIcon,
     StopIcon,
@@ -22,8 +21,7 @@ import {
     NotionIcon,
     RevisitIcon,
     GoogleSheetsIcon,
-    DoctalkIcon,
-    RefreshIcon
+    DoctalkIcon
 } from './components/icons.tsx';
 
 // TypeScript type definitions for Google API objects
@@ -142,7 +140,7 @@ const CalendarModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, on
     onClose: () => void;
     isSignedIn: boolean;
     isApiLoading: boolean;
-    apiError: string | null;
+    apiError: string;
     onAuthClick: () => void;
 }) => {
     const [events, setEvents] = useState<any[]>([]);
@@ -266,7 +264,7 @@ const TasksModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, onAut
     onClose: () => void;
     isSignedIn: boolean;
     isApiLoading: boolean;
-    apiError: string | null;
+    apiError: string;
     onAuthClick: () => void;
 }) => {
     const [tasks, setTasks] = useState<any[]>([]);
@@ -447,98 +445,11 @@ const App: React.FC = () => {
     const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('googleApiKey') || '');
     const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
 
-    // Google OAuth (PKCE)
-    const { isSignedIn: isGoogleSignedIn, signIn: handleGoogleAuthClick, signOut: handleGoogleSignOut, isLoading: isGoogleApiLoading, error: googleApiError, getValidAccessToken } = useGoogleAuth(googleClientId, googleApiKey);
-
-    // GAPI Client Initialization State
-    const [isGapiLoaded, setIsGapiLoaded] = useState(false);
-
-    // Load GAPI script and initialize client
-    useEffect(() => {
-        // Check if script is already loaded
-        if (window.gapi) {
-            setIsGapiLoaded(true);
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-            console.log('[GAPI] Script loaded');
-            setIsGapiLoaded(true);
-        };
-        script.onerror = () => {
-            console.error('[GAPI] Failed to load script');
-        };
-        document.body.appendChild(script);
-
-        return () => {
-            // Cleanup is optional for scripts
-        };
-    }, []);
-
-    // Initialize GAPI client when script is loaded and API key is available
-    useEffect(() => {
-        if (!isGapiLoaded || !googleApiKey) return;
-
-        const initGapiClient = async () => {
-            try {
-                await new Promise<void>((resolve, reject) => {
-                    window.gapi.load('client', { callback: resolve, onerror: reject });
-                });
-
-                await window.gapi.client.init({
-                    apiKey: googleApiKey,
-                    discoveryDocs: [
-                        'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
-                        'https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest',
-                        'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
-                    ],
-                });
-
-                console.log('[GAPI] Client initialized');
-
-                // Sync token if already signed in
-                if (isGoogleSignedIn) {
-                    try {
-                        const token = await getValidAccessToken();
-                        window.gapi.client.setToken({ access_token: token });
-                        console.log('[GAPI] Token synced successfully');
-                    } catch (e) {
-                        console.warn('[GAPI] Could not sync token:', e);
-                    }
-                }
-            } catch (error) {
-                console.error('[GAPI] Client init failed:', error);
-            }
-        };
-
-        initGapiClient();
-    }, [isGapiLoaded, googleApiKey, isGoogleSignedIn, getValidAccessToken]);
-
-    // Sync PKCE token to GAPI when sign-in status changes
-    useEffect(() => {
-        if (!isGapiLoaded || !window.gapi?.client) return;
-
-        const syncToken = async () => {
-            if (isGoogleSignedIn) {
-                try {
-                    const token = await getValidAccessToken();
-                    window.gapi.client.setToken({ access_token: token });
-                    console.log('[GAPI] Token synced on sign-in');
-                } catch (e) {
-                    console.warn('[GAPI] Token sync failed:', e);
-                }
-            } else {
-                window.gapi.client.setToken(null);
-                console.log('[GAPI] Token cleared on sign-out');
-            }
-        };
-
-        syncToken();
-    }, [isGoogleSignedIn, isGapiLoaded, getValidAccessToken]);
+    // Google API state
+    const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
+    const [googleApiError, setGoogleApiError] = useState('');
+    const [isGoogleApiLoading, setIsGoogleApiLoading] = useState(true);
+    const tokenClientRef = useRef<any>(null);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
@@ -552,29 +463,149 @@ const App: React.FC = () => {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const handleAuthResult = useCallback((tokenResponse: any) => {
+        if (tokenResponse && tokenResponse.access_token) {
+            window.gapi.client.setToken(tokenResponse);
+            setIsGoogleSignedIn(true);
+            localStorage.setItem('googleApiSignedIn', 'true');
+            setGoogleApiError('');
+
+            // 토큰 만료 시간 저장 (expires_in은 초 단위)
+            if (tokenResponse.expires_in) {
+                const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
+                localStorage.setItem('googleTokenExpiresAt', expiresAt.toString());
+                console.log('토큰 만료 시간 저장:', new Date(expiresAt).toLocaleTimeString('ko-KR'));
+            }
+        } else {
+            setIsGoogleSignedIn(false);
+            localStorage.removeItem('googleApiSignedIn');
+            localStorage.removeItem('googleTokenExpiresAt');
+        }
+        setIsGoogleApiLoading(false);
+    }, []);
+
+    useEffect(() => {
+        if (!googleApiKey || !googleClientId) {
+            setGoogleApiError('Google API 키와 클라이언트 ID를 설정에서 입력해주세요.');
+            setIsGoogleApiLoading(false);
+            return;
+        }
+
+        const initialize = async () => {
+            setIsGoogleApiLoading(true);
+            setGoogleApiError('');
+
+            await new Promise<void>((resolve) => {
+                const interval = setInterval(() => {
+                    if (window.gapi) {
+                        clearInterval(interval);
+                        window.gapi.load('client', resolve);
+                    }
+                }, 100);
+            });
+
+            await new Promise<void>((resolve) => {
+                const interval = setInterval(() => {
+                    if (window.google?.accounts?.oauth2) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 100);
+            });
+
+            try {
+                await window.gapi.client.init({
+                    apiKey: googleApiKey,
+                    discoveryDocs: [
+                        "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest",
+                        "https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest",
+                        "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
+                    ],
+                });
+
+                tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+                    client_id: googleClientId,
+                    scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.file',
+                    callback: handleAuthResult,
+                });
+
+                if (localStorage.getItem('googleApiSignedIn') === 'true') {
+                    tokenClientRef.current.requestAccessToken({ prompt: 'none' });
+                } else {
+                    setIsGoogleApiLoading(false);
+                    setIsGoogleSignedIn(false);
+                }
+            } catch (e) {
+                console.error("Error initializing Google clients", e);
+                setGoogleApiError('Google API 초기화에 실패했습니다.');
+                setIsGoogleApiLoading(false);
+            }
+        };
+
+        initialize();
+
+    }, [googleApiKey, googleClientId, handleAuthResult]);
+
+    const handleGoogleAuthClick = () => {
+        if (tokenClientRef.current) {
+            tokenClientRef.current.requestAccessToken({ prompt: '' });
+        }
+    };
+
+    const handleGoogleSignOut = () => {
+        const token = window.gapi.client.getToken();
+        if (token) {
+            window.google.accounts.oauth2.revoke(token.access_token, () => { });
+        }
+        window.gapi.client.setToken(null);
+        setIsGoogleSignedIn(false);
+        localStorage.removeItem('googleApiSignedIn');
+        localStorage.removeItem('googleTokenExpiresAt');
+        if (window.google?.accounts?.id) {
+            window.google.accounts.id.disableAutoSelect();
+        }
+    };
+
+    // 토큰 자동 갱신 (만료 5분 전에 자동 갱신)
+    useEffect(() => {
+        if (!isGoogleSignedIn || !tokenClientRef.current) return;
+
+        const REFRESH_THRESHOLD = 5 * 60 * 1000; // 5분 (밀리초)
+        const CHECK_INTERVAL = 60 * 1000; // 1분마다 체크
+
+        const checkAndRefreshToken = () => {
+            const expiresAtStr = localStorage.getItem('googleTokenExpiresAt');
+            if (!expiresAtStr) return;
+
+            const expiresAt = parseInt(expiresAtStr, 10);
+            const now = Date.now();
+            const timeUntilExpiry = expiresAt - now;
+
+            if (timeUntilExpiry < REFRESH_THRESHOLD && timeUntilExpiry > 0) {
+                // 만료 5분 전: 자동 갱신 시도
+                console.log('토큰이 곧 만료됩니다. 자동 갱신을 시도합니다.');
+                tokenClientRef.current.requestAccessToken({ prompt: '' });
+            } else if (timeUntilExpiry <= 0) {
+                // 이미 만료됨: 재인증 필요
+                console.log('토큰이 만료되었습니다. 재인증이 필요합니다.');
+                tokenClientRef.current.requestAccessToken({ prompt: 'none' });
+            }
+        };
+
+        // 초기 체크
+        checkAndRefreshToken();
+
+        // 1분마다 토큰 상태 체크
+        const intervalId = setInterval(checkAndRefreshToken, CHECK_INTERVAL);
+
+        return () => clearInterval(intervalId);
+    }, [isGoogleSignedIn]);
+
     useEffect(() => {
         if (!geminiApiKey) {
             setIsSettingsOpen(true);
         }
     }, [geminiApiKey]);
-
-    // 새 입력 - 상태 초기화 (페이지 새로고침 없이)
-    const handleReset = useCallback(() => {
-        setTranscript('');
-        setAdditionalNotes('');
-        setSoapChart('');
-        setSummary('');
-        setPatientName('');
-        setIsEditingPatientName(false);
-        setEditedPatientName('');
-        setError(null);
-        setIsEditing(false);
-        setIsEditingTranscript(false);
-        setStatusMessage('');
-        audioChunksRef.current = [];
-        completedAudioBlobsRef.current = [];
-        console.log('✅ 새 입력 - 상태 초기화 완료');
-    }, []);
 
     useEffect(() => {
         if (soapChart) {
@@ -1145,7 +1176,7 @@ const App: React.FC = () => {
                             <span>doctalk 예약</span>
                         </button>
                         <button
-                            onClick={() => window.open('https://www.notion.so/2c47db3c87d7812e996ee8549265544d?v=2c47db3c87d7800ea36f000c49b829fe', '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.open('https://www.notion.so/2b524d09893681e6b507ea7422cbe9ac?v=2b524d09893681ad9a41000cc76ed3f6', '_blank', 'noopener,noreferrer')}
                             className="flex items-center justify-center gap-x-1.5 bg-gray-700 text-gray-200 text-sm font-semibold py-1.5 px-2 rounded-md hover:bg-gray-600 transition-colors border border-gray-600 shadow-sm"
                             aria-label="Notion 위키 열기"
                             title="Notion 위키 열기"
@@ -1240,16 +1271,6 @@ const App: React.FC = () => {
                         >
                             {isSavingToDrive ? <Spinner className="w-8 h-8" /> : <SaveIcon className="w-8 h-8" />}
                             <span className="text-sm mt-1 font-semibold">{isSavingToDrive ? '저장 중...' : '저장'}</span>
-                        </button>
-                        <button
-                            onClick={handleReset}
-                            disabled={isGenerating || isRecording}
-                            className="w-24 h-24 rounded-full flex flex-col items-center justify-center transition-colors duration-300 ease-in-out shadow-lg bg-white hover:bg-gray-100 disabled:bg-gray-800 disabled:cursor-not-allowed disabled:text-gray-500 text-gray-800"
-                            aria-label="새 입력"
-                            title="새 입력 (상태 초기화)"
-                        >
-                            <RefreshIcon className="w-8 h-8" />
-                            <span className="text-sm mt-1 font-semibold">새 입력</span>
                         </button>
                     </div>
                     <p className="mt-4 text-gray-300 text-center h-5">{statusMessage || '진료 녹음을 시작하거나 텍스트를 입력하세요.'}</p>
