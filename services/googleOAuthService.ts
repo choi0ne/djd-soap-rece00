@@ -132,6 +132,17 @@ function getClientId(): string {
 }
 
 /**
+ * Client Secret 가져오기 (선택 - 없으면 null)
+ */
+function getClientSecret(): string | null {
+    try {
+        return localStorage.getItem('googleClientSecret') || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * 토큰이 유효한지 확인
  */
 export function isTokenValid(): boolean {
@@ -224,6 +235,12 @@ export async function exchangeCodeForTokens(code: string): Promise<OAuthTokens> 
         redirect_uri: redirectUri,
     });
 
+    // client_secret이 있으면 추가 (Refresh Token 발급에 필요)
+    const clientSecret = getClientSecret();
+    if (clientSecret) {
+        params.append('client_secret', clientSecret);
+    }
+
     const response = await fetch(OAUTH_CONFIG.tokenEndpoint, {
         method: 'POST',
         headers: {
@@ -270,12 +287,18 @@ export async function refreshAccessToken(): Promise<OAuthTokens> {
     }
 
     const clientId = getClientId();
+    const clientSecret = getClientSecret();
 
     const params = new URLSearchParams({
         client_id: clientId,
         refresh_token: tokens.refresh_token,
         grant_type: 'refresh_token',
     });
+
+    // client_secret이 있으면 추가
+    if (clientSecret) {
+        params.append('client_secret', clientSecret);
+    }
 
     const response = await fetch(OAUTH_CONFIG.tokenEndpoint, {
         method: 'POST',

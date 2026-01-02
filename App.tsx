@@ -39,6 +39,7 @@ interface Settings {
     geminiKey: string;
     googleApiKey: string;
     googleClientId: string;
+    googleClientSecret: string;
 }
 
 const SettingsModal = ({ isOpen, onClose, onSave, currentSettings }: {
@@ -50,17 +51,19 @@ const SettingsModal = ({ isOpen, onClose, onSave, currentSettings }: {
     const [geminiKey, setGeminiKey] = useState(currentSettings.geminiKey);
     const [googleApiKey, setGoogleApiKey] = useState(currentSettings.googleApiKey);
     const [googleClientId, setGoogleClientId] = useState(currentSettings.googleClientId);
+    const [googleClientSecret, setGoogleClientSecret] = useState(currentSettings.googleClientSecret);
 
     useEffect(() => {
         setGeminiKey(currentSettings.geminiKey);
         setGoogleApiKey(currentSettings.googleApiKey);
         setGoogleClientId(currentSettings.googleClientId);
+        setGoogleClientSecret(currentSettings.googleClientSecret);
     }, [currentSettings, isOpen]);
 
     if (!isOpen) return null;
 
     const handleSave = () => {
-        onSave({ geminiKey, googleApiKey, googleClientId });
+        onSave({ geminiKey, googleApiKey, googleClientId, googleClientSecret });
     };
 
     return (
@@ -118,6 +121,16 @@ const SettingsModal = ({ isOpen, onClose, onSave, currentSettings }: {
                             className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                             placeholder="Google Cloud OAuth 2.0 클라이언트 ID"
                         />
+                        <label htmlFor="google-client-secret" className="block text-sm font-medium text-gray-300 mb-1 mt-4">Client Secret (자동 로그인 유지용)</label>
+                        <input
+                            id="google-client-secret"
+                            type="password"
+                            value={googleClientSecret}
+                            onChange={(e) => setGoogleClientSecret(e.target.value)}
+                            className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            placeholder="Google Cloud OAuth 2.0 클라이언트 Secret"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">입력하면 Refresh Token으로 자동 로그인 유지됩니다.</p>
                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-brand-accent mt-1">
                             API 키 및 클라이언트 ID 발급받기
                         </a>
@@ -446,6 +459,7 @@ const App: React.FC = () => {
     const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
     const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('googleApiKey') || '');
     const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
+    const [googleClientSecret, setGoogleClientSecret] = useState(() => localStorage.getItem('googleClientSecret') || '');
 
     // Google OAuth (PKCE)
     const {
@@ -945,8 +959,10 @@ const App: React.FC = () => {
         setGoogleApiKey(settings.googleApiKey);
         localStorage.setItem('googleClientId', settings.googleClientId);
         setGoogleClientId(settings.googleClientId);
+        localStorage.setItem('googleClientSecret', settings.googleClientSecret);
+        setGoogleClientSecret(settings.googleClientSecret);
         setIsSettingsOpen(false);
-        alert('설정이 저장되었습니다.');
+        alert('설정이 저장되었습니다. 페이지를 새로고침하여 적용해주세요.');
     };
 
     const handleCloseSettings = () => {
@@ -1365,7 +1381,8 @@ const App: React.FC = () => {
                 currentSettings={{
                     geminiKey: geminiApiKey,
                     googleApiKey: googleApiKey,
-                    googleClientId: googleClientId
+                    googleClientId: googleClientId,
+                    googleClientSecret: googleClientSecret
                 }}
             />
             <CalendarModal
