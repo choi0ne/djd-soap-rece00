@@ -840,32 +840,31 @@ const App: React.FC = () => {
         }
         if (!soapChart || isSavingToDrive) return;
 
+        // PKCE 토큰 가져오기
+        const pkceTokenString = localStorage.getItem('google_oauth_tokens');
+        let oauthToken: string | null = null;
+        if (pkceTokenString) {
+            try {
+                const tokens = JSON.parse(pkceTokenString);
+                if (tokens?.access_token) {
+                    oauthToken = tokens.access_token;
+                }
+            } catch (e) {
+                console.error('토큰 파싱 실패:', e);
+            }
+        }
+
+        if (!oauthToken) {
+            setError('OAuth 토큰이 없습니다. 다시 로그인해주세요.');
+            return;
+        }
+
         setIsSavingToDrive(true);
         setStatusMessage('Google Drive에 저장 중...');
         setError(null);
 
         try {
-            // First, find the folder
-            const folderResponse = await window.gapi.client.drive.files.list({
-                q: "mimeType='application/vnd.google-apps.folder' and name='5clf' and trashed=false",
-                fields: 'files(id, name)',
-            });
-
-            let folderId = '1XGJmZp53bm_o-zaDgEzMv36FIxEL2e1F'; // Default to the provided ID
-
-            // This check is useful if the ID is ever invalid and we want to fallback to a name search
-            if (!folderResponse.result.files || folderResponse.result.files.length === 0) {
-                // Check if the default ID is accessible instead of creating a new folder
-                try {
-                    await window.gapi.client.drive.files.get({ fileId: folderId, fields: 'id' });
-                } catch (idError) {
-                    setError(<>Google Drive 저장 실패: 폴더를 찾을 수 없습니다. <br /> 관리자에게 문의하여 폴더 ID('1XGJmZp53bm_o-zaDgEzMv36FIxEL2e1F')가 올바른지 확인해주세요.</>);
-                    setStatusMessage('저장 실패.');
-                    setIsSavingToDrive(false);
-                    return;
-                }
-            }
-
+            const FOLDER_ID = '1XGJmZp53bm_o-zaDgEzMv36FIxEL2e1F';
             const boundary = '-------314159265358979323846';
             const delimiter = "\r\n--" + boundary + "\r\n";
             const close_delim = "\r\n--" + boundary + "--";
@@ -874,7 +873,7 @@ const App: React.FC = () => {
             const metadata = {
                 name: filename,
                 mimeType: 'text/plain',
-                parents: [folderId]
+                parents: [FOLDER_ID]
             };
 
             const multipartRequestBody =
@@ -886,30 +885,27 @@ const App: React.FC = () => {
                 soapChart +
                 close_delim;
 
-            const request = window.gapi.client.request({
-                'path': '/upload/drive/v3/files',
-                'method': 'POST',
-                'params': { 'uploadType': 'multipart' },
-                'headers': {
-                    'Content-Type': 'multipart/related; boundary="' + boundary + '"'
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${oauthToken}`,
+                    'Content-Type': `multipart/related; boundary="${boundary}"`
                 },
-                'body': multipartRequestBody
+                body: multipartRequestBody
             });
 
-            await request;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+            }
 
             alert('SOAP 차트가 Google Drive에 성공적으로 저장되었습니다!');
             setStatusMessage('Google Drive에 저장 완료.');
 
         } catch (err) {
             console.error('Error saving to Google Drive', err);
-            const errorResult = (err as any).result;
-            const errorMessage = errorResult?.error?.message || (err as Error).message || '알 수 없는 오류';
-            if (errorResult?.error?.code === 404) {
-                setError(<>Google Drive 저장 실패: 폴더를 찾을 수 없습니다. <br /> 관리자에게 문의하여 폴더 ID('1XGJmZp53bm_o-zaDgEzMv36FIxEL2e1F')가 올바른지 확인해주세요.</>);
-            } else {
-                setError(`Google Drive 저장 실패: ${errorMessage}`);
-            }
+            const errorMessage = (err as Error).message || '알 수 없는 오류';
+            setError(`Google Drive 저장 실패: ${errorMessage}`);
             setStatusMessage('저장 실패.');
         } finally {
             setIsSavingToDrive(false);
