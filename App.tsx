@@ -2,6 +2,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { transcribeWithGemini, generateSoapChart, verifyAndCorrectTranscript } from './services/geminiService.ts';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { PatientSearch } from './components/PatientSearch';
+import { Patient } from './services/dongjedangApiService';
 import {
     MicrophoneIcon,
     StopIcon,
@@ -455,6 +457,8 @@ const App: React.FC = () => {
     const [isEditingTranscript, setIsEditingTranscript] = useState(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+    const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false);
+    const [selectedPatient, setSelectedPatient] = useState<(Patient & { age?: number }) | null>(null);
 
     const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
     const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('googleApiKey') || '');
@@ -495,6 +499,7 @@ const App: React.FC = () => {
         setIsEditing(false);
         setIsEditingTranscript(false);
         setStatusMessage('');
+        setSelectedPatient(null);
         audioChunksRef.current = [];
         completedAudioBlobsRef.current = [];
         console.log('✅ 새 입력 - 상태 초기화 완료 (로그인 유지)');
@@ -1125,6 +1130,18 @@ const App: React.FC = () => {
                             <SettingsIcon className="w-4 h-4" />
                             <span>설정</span>
                         </button>
+                        {/* 환자 검색 버튼 */}
+                        <button
+                            onClick={() => setIsPatientSearchOpen(true)}
+                            className="flex items-center justify-center gap-x-1.5 bg-brand-primary hover:bg-brand-secondary text-white text-sm font-semibold py-1.5 px-2 rounded-md transition-colors shadow-sm w-full"
+                            aria-label="환자 검색"
+                            title="환자 검색"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span>{selectedPatient ? selectedPatient.name : '환자 검색'}</span>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -1396,6 +1413,14 @@ const App: React.FC = () => {
                 isApiLoading={isGoogleApiLoading}
                 apiError={googleApiError || ''}
                 onAuthClick={handleGoogleAuthClick}
+            />
+            <PatientSearch
+                isOpen={isPatientSearchOpen}
+                onClose={() => setIsPatientSearchOpen(false)}
+                onPatientSelect={(patient) => {
+                    setSelectedPatient(patient);
+                    console.log('✅ 환자 선택:', patient.name);
+                }}
             />
         </div>
     );
