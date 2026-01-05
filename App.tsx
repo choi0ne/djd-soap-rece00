@@ -828,7 +828,7 @@ const App: React.FC = () => {
             .catch(() => alert('요약 내용 복사에 실패했습니다.'));
     };
 
-    const generateFilename = (prefix: string, extension: 'txt'): string => {
+    const generateFilename = (prefix: string, extension: 'txt' | 'md'): string => {
         const now = new Date();
         const year = now.getFullYear();
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -942,9 +942,9 @@ const App: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    const saveSoapChartAsTextFile = () => {
-        const filename = generateFilename('SOAP차트', 'txt');
-        const blob = new Blob([soapChart], { type: 'text/plain;charset=utf-8' });
+    const saveSoapChartAsMarkdownFile = () => {
+        const filename = generateFilename('SOAP차트', 'md');
+        const blob = new Blob([soapChart], { type: 'text/markdown;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = filename;
@@ -955,7 +955,7 @@ const App: React.FC = () => {
 
     const handleSaveChart = () => {
         if (!soapChart) return;
-        saveSoapChartAsTextFile();
+        saveSoapChartAsMarkdownFile();
         handleSaveToDrive();
     };
 
