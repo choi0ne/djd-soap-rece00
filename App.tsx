@@ -931,9 +931,9 @@ const App: React.FC = () => {
         }
     };
 
-    const saveTranscriptAsTextFile = () => {
-        const filename = generateFilename('전사내용', 'txt');
-        const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
+    const saveTranscriptAsMarkdownFile = () => {
+        const filename = generateFilename('전사내용', 'md');
+        const blob = new Blob([transcript], { type: 'text/markdown;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = filename;
@@ -1230,7 +1230,7 @@ const App: React.FC = () => {
                                         <button onClick={copyTranscriptToClipboard} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label="클립보드에 복사">
                                             <CopyIcon className="w-5 h-5" />
                                         </button>
-                                        <button onClick={saveTranscriptAsTextFile} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label="텍스트 파일로 저장">
+                                        <button onClick={saveTranscriptAsMarkdownFile} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label="마크다운 파일로 저장">
                                             <SaveIcon className="w-5 h-5" />
                                         </button>
                                     </div>
