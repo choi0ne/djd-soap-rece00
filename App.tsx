@@ -520,11 +520,25 @@ const App: React.FC = () => {
             const extractedSummary = summaryMatch ? summaryMatch[1].trim() : '';
             setSummary(extractedSummary);
 
-            // Extract patient name
-            const nameRegex = /✅ 환자명:\s*(.*)/;
-            const nameMatch = soapChart.match(nameRegex);
-            const extractedName = nameMatch ? nameMatch[1].trim() : '';
-            setPatientName(extractedName);
+            // 환자명 처리: selectedPatient가 있으면 우선 사용 (AI 추출 무시)
+            if (selectedPatient) {
+                // 선택된 환자가 있으면 해당 환자명 고정
+                setPatientName(selectedPatient.name);
+                // SOAP 차트 내의 환자명도 선택된 환자로 업데이트
+                const updatedChart = soapChart.replace(
+                    /(✅ 환자명:\s*)(.*)/,
+                    `$1${selectedPatient.name}`
+                );
+                if (updatedChart !== soapChart) {
+                    setSoapChart(updatedChart);
+                }
+            } else {
+                // 이머전시 모드: 선택된 환자 없으면 AI가 추출한 이름 사용
+                const nameRegex = /✅ 환자명:\s*(.*)/;
+                const nameMatch = soapChart.match(nameRegex);
+                const extractedName = nameMatch ? nameMatch[1].trim() : '';
+                setPatientName(extractedName);
+            }
 
             // If we were editing, stop editing when chart re-generates
             setIsEditingPatientName(false);
@@ -532,7 +546,7 @@ const App: React.FC = () => {
             setSummary('');
             setPatientName('');
         }
-    }, [soapChart]);
+    }, [soapChart, selectedPatient]);
 
     const handleGenerateChart = useCallback(async (
         transcriptText: string,
@@ -1079,7 +1093,7 @@ const App: React.FC = () => {
                             <span>doctalk 예약</span>
                         </button>
                         <button
-                            onClick={() => window.open('https://www.notion.so/2b524d09893681e6b507ea7422cbe9ac?v=2b524d09893681ad9a41000cc76ed3f6', '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.open('https://www.notion.so/2c47db3c87d7812e996ee8549265544d?v=2c47db3c87d7800ea36f000c49b829fe', '_blank', 'noopener,noreferrer')}
                             className="flex items-center justify-center gap-x-1.5 bg-gray-700 text-gray-200 text-sm font-semibold py-1.5 px-2 rounded-md hover:bg-gray-600 transition-colors border border-gray-600 shadow-sm"
                             aria-label="Notion 위키 열기"
                             title="Notion 위키 열기"
