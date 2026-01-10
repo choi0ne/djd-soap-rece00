@@ -25,7 +25,8 @@ import {
     RevisitIcon,
     GoogleSheetsIcon,
     DoctalkIcon,
-    RefreshIcon
+    RefreshIcon,
+    SlackIcon
 } from './components/icons.tsx';
 
 // TypeScript type definitions for Google API objects
@@ -276,6 +277,132 @@ const CalendarModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, on
     );
 };
 
+const MedicationCalendarModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, onAuthClick }: {
+    isOpen: boolean;
+    onClose: () => void;
+    isSignedIn: boolean;
+    isApiLoading: boolean;
+    apiError: string;
+    onAuthClick: () => void;
+}) => {
+    const [events, setEvents] = useState<any[]>([]);
+    const [isFetching, setIsFetching] = useState(false);
+    const [fetchError, setFetchError] = useState('');
+
+    const MEDICATION_CALENDAR_ID = 'd80e1cf61366f84cd933fd47cd684ba45ad8b9267195ded427cec993dadc67a1@group.calendar.google.com';
+
+    const calendarColorMap: { [key: string]: string } = {
+        '1': '#7986cb', '2': '#33b679', '3': '#8e24aa', '4': '#e67c73',
+        '5': '#f6c026', '6': '#f5511d', '7': '#039be5', '8': '#616161',
+        '9': '#3f51b5', '10': '#0b8043', '11': '#d60000',
+    };
+    const defaultCalendarColor = '#33b679'; // 녹색 (복약용)
+
+    const formatEventTime = (start: any, end: any): string => {
+        if (!start.dateTime) {
+            return "하루 종일";
+        }
+        try {
+            const startTime = new Date(start.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const endTime = new Date(end.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+            return `${startTime} - ${endTime}`;
+        } catch (e) {
+            return "시간 정보 없음";
+        }
+    };
+
+    const fetchEvents = useCallback(async () => {
+        if (!isSignedIn) return;
+        setIsFetching(true);
+        setFetchError('');
+        try {
+            const today = new Date();
+            const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+            const timeMax = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 0, 0, -1).toISOString();
+            const response = await window.gapi.client.calendar.events.list({
+                'calendarId': MEDICATION_CALENDAR_ID,
+                'timeMin': timeMin,
+                'timeMax': timeMax,
+                'showDeleted': false,
+                'singleEvents': true,
+                'orderBy': 'startTime'
+            });
+            setEvents(response.result.items || []);
+        } catch (err) {
+            console.error(err);
+            setFetchError('복약 일정을 불러오는 데 실패했습니다. 권한을 확인하거나 다시 로그인해주세요.');
+        } finally {
+            setIsFetching(false);
+        }
+    }, [isSignedIn]);
+
+    useEffect(() => {
+        if (isOpen && isSignedIn) {
+            fetchEvents();
+        }
+        if (!isOpen) {
+            setEvents([]);
+            setFetchError('');
+        }
+    }, [isOpen, isSignedIn, fetchEvents]);
+
+    if (!isOpen) return null;
+
+    const currentError = apiError || fetchError;
+    const currentIsLoading = isApiLoading || isFetching;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+            <div className="bg-gray-800 text-white rounded-lg shadow-2xl p-6 w-full max-w-md m-4">
+                <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
+                    <h2 className="text-xl font-semibold text-white flex items-center">
+                        <span className="w-6 h-6 mr-3 text-green-400">💊</span>
+                        복약 캘린더
+                    </h2>
+                    <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+                        <CloseIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="h-64 overflow-y-auto bg-gray-900 rounded-md p-3 border border-gray-700">
+                    {currentIsLoading ? (
+                        <div className="flex justify-center items-center h-full">
+                            <Spinner className="w-8 h-8 text-green-400" />
+                        </div>
+                    ) : currentError ? (
+                        <div className="flex justify-center items-center h-full text-red-400 p-4 text-center">{currentError}</div>
+                    ) : !isSignedIn ? (
+                        <div className="flex justify-center items-center h-full">
+                            <button
+                                onClick={onAuthClick}
+                                className="flex items-center justify-center gap-x-3 bg-gray-700 text-white font-semibold py-2 px-6 rounded-md hover:bg-gray-600 transition-colors border border-gray-600 shadow-sm"
+                            >
+                                <GoogleIcon className="w-6 h-6" />
+                                Google 계정으로 로그인
+                            </button>
+                        </div>
+                    ) : events.length > 0 ? (
+                        <ul className="space-y-2">
+                            {events.map((event) => (
+                                <li key={event.id} className="p-3 bg-gray-700 rounded-md text-gray-200 shadow-sm border border-gray-600 flex items-start space-x-3">
+                                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: calendarColorMap[event.colorId] || defaultCalendarColor }}></div>
+                                    <div className="flex-grow">
+                                        <p className="font-semibold">{event.summary}</p>
+                                        <p className="text-sm text-gray-400">{formatEventTime(event.start, event.end)}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="flex justify-center items-center h-full text-gray-400">
+                            오늘 등록된 복약 일정이 없습니다.
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TasksModal = ({ isOpen, onClose, isSignedIn, isApiLoading, apiError, onAuthClick }: {
     isOpen: boolean;
     onClose: () => void;
@@ -453,6 +580,7 @@ const App: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [isTasksOpen, setIsTasksOpen] = useState(false);
+    const [isMedicationCalendarOpen, setIsMedicationCalendarOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [isEditingTranscript, setIsEditingTranscript] = useState(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -1156,6 +1284,26 @@ const App: React.FC = () => {
                             </svg>
                             <span>{selectedPatient ? selectedPatient.name : '환자 검색'}</span>
                         </button>
+                        {/* 복약 캘린더 버튼 */}
+                        <button
+                            onClick={() => setIsMedicationCalendarOpen(true)}
+                            className="flex items-center justify-center gap-x-1.5 bg-green-700 text-gray-200 text-sm font-semibold py-1.5 px-2 rounded-md hover:bg-green-600 transition-colors border border-green-600 shadow-sm w-full"
+                            aria-label="복약 캘린더 보기"
+                            title="복약 캘린더 보기"
+                        >
+                            <span className="w-4 h-4">💊</span>
+                            <span>복약 캘린더</span>
+                        </button>
+                        {/* 슬랙DM 버튼 */}
+                        <button
+                            onClick={() => window.open('https://app.slack.com/client/T0A188S5VQT', '_blank', 'noopener,noreferrer')}
+                            className="flex items-center justify-center gap-x-1.5 bg-purple-700 text-gray-200 text-sm font-semibold py-1.5 px-2 rounded-md hover:bg-purple-600 transition-colors border border-purple-600 shadow-sm w-full"
+                            aria-label="슬랙 DM 열기"
+                            title="슬랙 DM 열기"
+                        >
+                            <SlackIcon className="w-4 h-4" />
+                            <span>슬랙 DM</span>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -1397,7 +1545,7 @@ const App: React.FC = () => {
             </main>
 
             <footer className="w-full max-w-7xl mt-8 text-center text-xs text-gray-500">
-                <p>© 2025 DJD Quality-improvement in Clinical Practice. All rights reserved.</p>
+                <p>© 2030 DJD Quality-improvement in Clinical Practice. All rights reserved.</p>
                 <p className="mt-1">본 서비스는 진료개선화 도구이며, 임상 의사결정을 대체할 수 없습니다.</p>
             </footer>
 
@@ -1415,6 +1563,14 @@ const App: React.FC = () => {
             <CalendarModal
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}
+                isSignedIn={isGoogleSignedIn}
+                isApiLoading={isGoogleApiLoading}
+                apiError={googleApiError || ''}
+                onAuthClick={handleGoogleAuthClick}
+            />
+            <MedicationCalendarModal
+                isOpen={isMedicationCalendarOpen}
+                onClose={() => setIsMedicationCalendarOpen(false)}
                 isSignedIn={isGoogleSignedIn}
                 isApiLoading={isGoogleApiLoading}
                 apiError={googleApiError || ''}
